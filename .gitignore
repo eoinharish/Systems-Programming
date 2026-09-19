@@ -1,0 +1,14 @@
+# Compiled binaries
+client
+server
+hello
+
+# Profiling data
+*.data
+
+# Build directories
+build/
+bin/
+
+# Debug symbols
+*.dSYM/
