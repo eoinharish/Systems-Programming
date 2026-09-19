@@ -39,6 +39,8 @@
  - connect() triggers the TCP three-way handshake.
 
 ---------------------------------------------------------
+"tcpdump" is a command-line packet capture and network analysis tool used to capture and inspect network packets. It helps troubleshoot connectivity, analyze TCP handshakes, inspect packet headers, sequence numbers, flags, and diagnose network issues.
+
 sudo tcpdump -i lo -nn -S 'tcp port 8080'
 ---------------------------------------------------------            
 tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
