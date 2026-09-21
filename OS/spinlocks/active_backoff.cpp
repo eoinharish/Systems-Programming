@@ -9,13 +9,27 @@ class Spinlock
         std::atomic<bool> locked{false};
 
     public:
-        void lock(){
+        void lock()
+        {
+            while(1)
+            {
+                // Try and grab the lock
+                // Return if we get the lock
+                if(!locked.exchange(true, std::memory_order_acquire)){
+                    return;
+                }
 
-            // atomic exchange returns the old value of the lock
-            // If the lock is free (false), it is set to true and loop exits
-            // If the lock is taken (true), spin in the loop until someone else frees the lock
-            // and we grab it
-            while(locked.exchange(true, std::memory_order_acquire)){
+                // If we didn't get the lock, just read the value which gets cached locally.
+                // This minimizes the atomic writes-> leads to less cache-coherence traffic
+                // and less no. of cache invalidations
+                // Each iteration we can also call pause to limit the number of writes (bursty contention)
+                while(locked.load(std::memory_order_relaxed)){
+
+                    // pause for some number of iterations
+                    for(volatile int i = 0; i < 100; i += 1){
+
+                    }
+                }
             }
         }
 
@@ -28,14 +42,19 @@ void inc (Spinlock& sl, int64_t& val)
 {
     for(int i=0; i < 100'000; i++)
     {
+        // Hot path
+        // Frequent atomic reads/writes
+        // Atomic writes causes L1-d cache misses
         sl.lock();
         val++;
         sl.unlock();
     }
 }
 
-static void naive(benchmark::State &s)
+// Small benchmark
+static void active_backoff(benchmark::State &s)
 {
+    // Sweep over a range of threads
     auto num_threads = s.range(0);
 
     // allocate a vector of threads
@@ -70,7 +89,7 @@ static void naive(benchmark::State &s)
 
 }
 
-BENCHMARK(naive)
+BENCHMARK(active_backoff)
     ->RangeMultiplier(2)
     ->Range(1, std::thread::hardware_concurrency()) // range[1, no_of_hardware_threads]
     ->UseRealTime()
