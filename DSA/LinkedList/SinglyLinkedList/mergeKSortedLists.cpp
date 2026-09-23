@@ -37,7 +37,7 @@ public:
         }
 
         Node* tail = dummy;
-        while(!pq.empty())
+        while (!pq.empty())
         {
             int value = pq.top().first;
             Node* node = pq.top().second;
