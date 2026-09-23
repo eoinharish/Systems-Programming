@@ -1,7 +1,10 @@
 # Compiled binaries
-client
-server
-hello
+*.out
+*.exe
+
+# Object files
+*.o
+*.obj
 
 # Profiling data
 *.data
