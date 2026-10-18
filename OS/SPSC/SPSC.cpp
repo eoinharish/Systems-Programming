@@ -67,7 +67,6 @@ bool SPSC<T>::isPopCursorLockFree()
 template<typename T>
 SPSC<T>::~SPSC()
 {
-    cout << "dtor()\n";
     delete[] buffer;
 }
 
