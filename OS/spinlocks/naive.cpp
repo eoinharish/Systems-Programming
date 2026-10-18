@@ -20,7 +20,7 @@ class Spinlock
         }
 
         void unlock(){
-            locked.store(false, std::memory_order_release); // NOTE: revise seq_cst, relaxed, store-release
+            locked.store(false, std::memory_order_release);
         }
 };
 
@@ -40,7 +40,7 @@ static void naive(benchmark::State &s)
 
     // allocate a vector of threads
     std::vector<std::thread> threads;
-    threads.reserve(num_threads); // To avoid repeated reallocations, refer reserve() vs resize() card
+    threads.reserve(num_threads); // To avoid repeated reallocations
 
     Spinlock sl;
     int64_t val = 0; // value we will increment
@@ -77,7 +77,3 @@ BENCHMARK(naive)
     ->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();
-
-// Google Benchmark includes the upper bound of the range, even if the multiplier would skip over it.
-// NOTE: ->RangeMultiplier(16)
-//       ->Range(1, 4) -> runs naive/1, naive/4

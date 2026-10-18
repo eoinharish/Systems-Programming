@@ -54,7 +54,7 @@ static void spin_locally(benchmark::State &s)
 
     // allocate a vector of threads
     std::vector<std::thread> threads;
-    threads.reserve(num_threads); // To avoid repeated reallocations, refer reserve() vs resize() card
+    threads.reserve(num_threads); // To avoid repeated reallocations
 
     Spinlock sl;
     int64_t val = 0; // value we will increment
@@ -91,7 +91,3 @@ BENCHMARK(spin_locally)
     ->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();
-
-// Google Benchmark includes the upper bound of the range, even if the multiplier would skip over it.
-// NOTE: ->RangeMultiplier(16)
-//       ->Range(1, 4) -> runs naive/1, naive/4
