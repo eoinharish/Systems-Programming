@@ -71,3 +71,4 @@ SPSC<T>::~SPSC()
 }
 
 template class SPSC<int>;
+template class SPSC<uint64_t>;
