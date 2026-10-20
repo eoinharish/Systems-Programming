@@ -16,6 +16,7 @@ class MutexQueue
     public:
         MutexQueue(int cap = 10);
 
+        // std::mutex is neither copyable nor movable
         MutexQueue(const MutexQueue& other) = delete;
         MutexQueue& operator=(const MutexQueue& other) = delete;
         MutexQueue(MutexQueue&& other) = delete;

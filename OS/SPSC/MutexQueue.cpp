@@ -21,7 +21,7 @@ bool MutexQueue<T>::push(T val)
         return false;
     }
 
-    buffer[push_cursor % capacity] = val;
+    buffer[push_cursor & (capacity-1)] = val; // cap is a power of 2
     push_cursor++;
     return true;
 }
@@ -36,7 +36,7 @@ bool MutexQueue<T>::pop(T& val)
         return false;
     }
 
-    val = buffer[pop_cursor % capacity];
+    val = buffer[pop_cursor & (capacity-1)];
     pop_cursor++;
     return true;
 }

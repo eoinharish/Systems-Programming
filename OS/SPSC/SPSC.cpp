@@ -23,7 +23,7 @@ bool SPSC<T>::push(T val)
         return false;
     }
 
-    buffer[pushCursor % capacity] = val;
+    buffer[pushCursor & (capacity - 1)] = val; // cap is a power of 2
     
     push_cursor.store(pushCursor + 1, std::memory_order_release);
     return true;
@@ -39,7 +39,7 @@ bool SPSC<T>::pop(T& val)
     {
         return false;
     }
-    val = buffer[popCursor % capacity];
+    val = buffer[popCursor & (capacity - 1)];
     pop_cursor.store(popCursor + 1, std::memory_order_release);
     return true;
 }

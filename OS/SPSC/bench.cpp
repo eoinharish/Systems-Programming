@@ -7,10 +7,14 @@
 #include <algorithm>
 #include <memory>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <pthread.h>
 #include <sched.h>
+#include <new>
+#include <atomic>
 
-constexpr int NUM_ITEMS = 5'000'000;
+constexpr int NUM_ITEMS = 10'000'000;
 constexpr int REPS = 5;
 
 static void pin_to_cpu(int cpu)
@@ -18,12 +22,17 @@ static void pin_to_cpu(int cpu)
     cpu_set_t set;
     CPU_ZERO(&set);
     CPU_SET(cpu, &set);
-    pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+    int rc = pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+    if (rc != 0)
+    {
+        std::fprintf(stderr, "pin_to_cpu(%d) failed: %s\n", cpu, std::strerror(rc));
+        std::exit(1);   // for a benchmark, a failed pin makes results invalid
+    }
 }
 
 
 template<typename Q>
-void producer(Q& q, atomic<int>& fullRetries, atomic<bool>& failed)
+void producer(Q& q, size_t& fullRetries, std::atomic<bool>& failed)
 {
     pin_to_cpu(0);
     for(int i=0; i < NUM_ITEMS; )
@@ -36,13 +45,17 @@ void producer(Q& q, atomic<int>& fullRetries, atomic<bool>& failed)
         {
             if (failed.load()) return;   // avoids hanging if consumer bailed out
             fullRetries++;
-            std::this_thread::yield();
+
+            // std::this_thread::yield() hints to the thread scheduler that the current thread is willing to let another
+            // runnable thread execute.
+            // It doesn't block or sleep the thread. The scheduler may run another thread or immediately resume the current one.
+            std::this_thread::yield(); // let other thread progress (but depends on thread scheduler)
         }
     }
 }
 
 template<typename Q>
-void consumer(Q& q, atomic<int>& emptyRetries, atomic<bool>& failed, atomic<int>& consumed)
+void consumer(Q& q, size_t& emptyRetries, std::atomic<bool>& failed, size_t& consumed)
 {
     pin_to_cpu(1);
     for(int expected = 0; expected < NUM_ITEMS; )
@@ -70,8 +83,8 @@ void consumer(Q& q, atomic<int>& emptyRetries, atomic<bool>& failed, atomic<int>
 struct Result
 {
     double mops;      // million items/sec
-    int fullRetries;
-    int emptyRetries;
+    size_t fullRetries;
+    size_t emptyRetries;
     bool failed;
 };
 
@@ -80,10 +93,10 @@ Result run(int cap)
 {
     Q q(cap);
 
-    atomic<int> fullRetries{0};
-    atomic<int> emptyRetries{0};
-    atomic<int> consumed{0};
-    atomic<bool> failed{false};
+    alignas(cache_line_size) size_t fullRetries{0};
+    alignas(cache_line_size) size_t emptyRetries{0};
+    alignas(cache_line_size) size_t consumed{0};
+    alignas(cache_line_size) std::atomic<bool> failed{false};
 
     auto start = std::chrono::steady_clock::now();
 
@@ -96,8 +109,8 @@ Result run(int cap)
     auto end = std::chrono::steady_clock::now();
     double sec = std::chrono::duration<double>(end - start).count();
 
-    bool bad = failed.load() || consumed.load() != NUM_ITEMS;
-    return { NUM_ITEMS / sec / 1e6, fullRetries.load(), emptyRetries.load(), bad };
+    bool bad = failed.load() || consumed != NUM_ITEMS;
+    return { NUM_ITEMS / sec / 1e6, fullRetries, emptyRetries, bad };
 }
 
 // Run REPS times, return the median result by throughput
@@ -124,9 +137,9 @@ int main()
         Result lf  = median_run<SPSC<int>>(cap);
 
         std::printf("cap=%-6d\n", cap);
-        std::printf("  mutex     : %7.2f M items/s  (full retries: %d, empty retries: %d, failed: %d)\n",
+        std::printf("  mutex     : %7.2f M items/s  (full retries: %zu, empty retries: %zu, failed: %d)\n",
                     mtx.mops, mtx.fullRetries, mtx.emptyRetries, (int)mtx.failed);
-        std::printf("  lock-free : %7.2f M items/s  (full retries: %d, empty retries: %d, failed: %d)\n",
+        std::printf("  lock-free : %7.2f M items/s  (full retries: %zu, empty retries: %zu, failed: %d)\n",
                     lf.mops, lf.fullRetries, lf.emptyRetries, (int)lf.failed);
         std::printf("  speedup   : %.2fx\n\n", lf.mops / mtx.mops);
     }

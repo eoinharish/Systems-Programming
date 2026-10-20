@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <atomic>
 #include <memory>
@@ -9,9 +10,7 @@
     #define CURSOR_ALIGN alignas(cache_line_size)
 #endif
 
-using namespace std;
-
-inline constexpr size_t cache_line_size  = std::hardware_destructive_interference_size;
+constexpr size_t cache_line_size  = std::hardware_destructive_interference_size;
 
 template<typename T>
 class SPSC
@@ -19,12 +18,13 @@ class SPSC
     public:
         T* buffer;
         size_t capacity;
-        CURSOR_ALIGN atomic<size_t> pop_cursor {0};
-        CURSOR_ALIGN atomic<size_t> push_cursor {0};
+        CURSOR_ALIGN std::atomic<size_t> pop_cursor {0};
+        CURSOR_ALIGN std::atomic<size_t> push_cursor {0};
 
     public:
         SPSC(int cap = 10);
 
+        // std::atomic is neither copyable nor movable
         SPSC(const SPSC& other) = delete;
         SPSC& operator=(const SPSC& other) = delete;
         SPSC(SPSC&& other) = delete;
