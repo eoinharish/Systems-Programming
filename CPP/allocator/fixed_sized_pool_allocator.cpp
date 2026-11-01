@@ -23,7 +23,8 @@ class PoolAllocator
         char* arena; // raw memory
         size_t slotSize; // size of each slot
 
-        struct Node {
+        struct Node
+        {
             Node* next;
         };
 
