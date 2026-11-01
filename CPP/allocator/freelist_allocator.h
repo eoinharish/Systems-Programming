@@ -125,70 +125,70 @@ class FreeListAllocator
             std::cout << '\n';
         }
 
-        private:
+    private:
 
-            // If 'block' is much bigger than 'requestedSize', cut off the extra
-            // as a brand-new free block right after it.
-            void split(Header* current, size_t requestedSize)
+        // If 'block' is much bigger than 'requestedSize', cut off the extra
+        // as a brand-new free block right after it.
+        void split(Header* current, size_t requestedSize)
+        {
+            size_t leftover = current->size - requestedSize;
+
+            if (leftover <= HEADER_SIZE)
             {
-                size_t leftover = current->size - requestedSize;
+                return; // not worth splitting, just hand out the whole block
+            }
 
-                if (leftover <= HEADER_SIZE)
-                {
-                    return; // not worth splitting, just hand out the whole block
-                }
+            char* newBlockAddr = reinterpret_cast<char*>(current) + HEADER_SIZE + requestedSize;
+            Header* newHeader = reinterpret_cast<Header*>(newBlockAddr);
+            newHeader->size = current->size - (HEADER_SIZE + requestedSize); // or leftover - sizeof(Header)
+            newHeader->free = true;
+            newHeader->next = current->next;
+            newHeader->prev = current;
+            
+            current->free = false;
+            current->size = requestedSize;
 
-                char* newBlockAddr = reinterpret_cast<char*>(current) + HEADER_SIZE + requestedSize;
-                Header* newHeader = reinterpret_cast<Header*>(newBlockAddr);
-                newHeader->size = current->size - (HEADER_SIZE + requestedSize); // or leftover - sizeof(Header)
-                newHeader->free = true;
-                newHeader->next = current->next;
-                newHeader->prev = current;
-                
-                current->free = false;
-                current->size = requestedSize;
+            if (current->next != nullptr)
+            {
+                current->next->prev = newHeader;
+            }
+
+            current->next = newHeader;
+        }
+
+        // Check next and prev blocks: if they are free, merge with them.
+        // Prevents external fragmentation to some extent
+        void coalesce(Header* current)
+        {
+            // Merge with the next block
+            if (current->next != nullptr && current->next->free)
+            {
+                Header* nextBlock = current->next;
+                current->size = nextBlock->size + HEADER_SIZE + current->size;
+                current->free = true;
+
+                current->next = nextBlock->next;
 
                 if (current->next != nullptr)
                 {
-                    current->next->prev = newHeader;
+                    current->next->prev = current;
                 }
 
-                current->next = newHeader;
             }
 
-            // Check next and prev blocks: if they are free, merge with them.
-            // Prevents external fragmentation to some extent
-            void coalesce(Header* current)
+            // Merge with the prev block
+            if (current->prev != nullptr && current->prev->free)
             {
-                // Merge with the next block
-                if (current->next != nullptr && current->next->free)
+                Header* prevBlock = current->prev;
+                prevBlock->size = prevBlock->size + HEADER_SIZE + current->size;
+                prevBlock->free = true;
+
+                prevBlock->next = current->next;
+
+                if (prevBlock->next != nullptr)
                 {
-                    Header* nextBlock = current->next;
-                    current->size = nextBlock->size + HEADER_SIZE + current->size;
-                    current->free = true;
-
-                    current->next = nextBlock->next;
-
-                    if (current->next != nullptr)
-                    {
-                        current->next->prev = current;
-                    }
-
-                }
-
-                // Merge with the prev block
-                if (current->prev != nullptr && current->prev->free)
-                {
-                    Header* prevBlock = current->prev;
-                    prevBlock->size = prevBlock->size + HEADER_SIZE + current->size;
-                    prevBlock->free = true;
-
-                    prevBlock->next = current->next;
-
-                    if (prevBlock->next != nullptr)
-                    {
-                        prevBlock->next->prev = prevBlock;
-                    }
+                    prevBlock->next->prev = prevBlock;
                 }
             }
+        }
 };
