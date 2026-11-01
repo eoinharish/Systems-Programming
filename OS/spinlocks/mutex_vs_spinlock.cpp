@@ -21,11 +21,10 @@ class Spinlock
                 }
 
                 while (flag.load(std::memory_order_relaxed)) // test
-		{
-		    // read-only spinning
-		    _mm_pause(); // x86 PAUSE instruction: rep nop
-		}
-                
+		        {
+		            // read-only spinning
+		            _mm_pause(); // x86 PAUSE instruction: rep nop
+		        }
             }
         }
 
@@ -48,7 +47,7 @@ static void BM_mutex(benchmark::State& s)
         counter++;
         for (volatile int i = 0; i < 100; i++){}
         
-	mtx.unlock();
+	    mtx.unlock();
     }
 
     benchmark::DoNotOptimize(counter); // avoid dead-code elimination of counter
@@ -60,10 +59,10 @@ static void BM_spinlock(benchmark::State& s)
     {
         sl.lock();
         
-	counter++;
-	for (volatile int i = 0; i < 100; i++){}
+	    counter++;
+	    for (volatile int i = 0; i < 100; i++){}
         
-	sl.unlock();
+	    sl.unlock();
     }
 
     benchmark::DoNotOptimize(counter); // avoid dead-code elimination of counter
