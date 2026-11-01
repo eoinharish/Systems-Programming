@@ -15,12 +15,13 @@
 //              split it if there's a lot of leftover space.
 // deallocate(): mark the block free, then try to merge with neighbors.
 
-
 struct Header
 {
     size_t size; // how big this block is (NOT including header)
     bool free; // is it currently in use or not
+
     Header* next; // pointer to the next block in memory, for walking the list
+    Header* prev; // pointer to the previous block
 };
 
 class FreeListAllocator
@@ -29,16 +30,45 @@ class FreeListAllocator
         char* arena;
         Header* head; // first block in the whole arena
 
+        size_t alignSize(size_t size)
+        {
+            size_t remainder = size % ALIGNMENT; // % 16
+
+            if (remainder == 0)
+            {
+                return size;
+            }
+
+            size_t padding = ALIGNMENT - remainder;
+
+            return size + padding;
+        }
+
     public:
+        static constexpr size_t ALIGNMENT = 16;
+        static constexpr size_t HEADER_SIZE = sizeof(Header);
+
         FreeListAllocator(size_t totalSize)
         {
+            if (totalSize < HEADER_SIZE + ALIGNMENT)
+            {
+                throw std::invalid_argument("Arena size too small");
+            }
+
             arena = new char[totalSize];
 
             // the whole arena starts as ONE big free block
             head = reinterpret_cast<Header*>(arena);
-            head->size = totalSize - sizeof(Header);
+
+            // Keep the block size aligned
+            size_t availableBlockSize = totalSize - HEADER_SIZE;
+            availableBlockSize = availableBlockSize - (availableBlockSize % ALIGNMENT);
+
+            head->size = availableBlockSize;
             head->free = true;
+
             head->next = nullptr;
+            head->prev = nullptr;
         }
 
         ~FreeListAllocator()
@@ -58,9 +88,9 @@ class FreeListAllocator
                     split(current, requestedSize);
                     current->free = false;
                     
-                    // Ex: block start address: 1000, return address: 1024
-                    // As need to reserve 24 bytes for Header
-                    return reinterpret_cast<char*>(current) + sizeof(Header);
+                    // Ex: block start address: 1000, return address: 1032
+                    // As need to reserve 32 bytes for Header
+                    return reinterpret_cast<char*>(current) + HEADER_SIZE;
                 }
                 current = current->next;
             }
@@ -72,10 +102,10 @@ class FreeListAllocator
         {
             if (!ptr) return;
 
-            Header* header = reinterpret_cast<Header*>(reinterpret_cast<char*>(ptr) - sizeof(Header));
-            header->free = true;
+            Header* current = reinterpret_cast<Header*>(reinterpret_cast<char*>(ptr) - HEADER_SIZE);
+            current->free = true;
 
-            coalesce();
+            coalesce(current);
         }
 
         void debugPrint()
@@ -101,45 +131,64 @@ class FreeListAllocator
             {
                 size_t leftover = current->size - requestedSize;
 
-                if (leftover <= sizeof(Header))
+                if (leftover <= HEADER_SIZE)
                 {
                     return; // not worth splitting, just hand out the whole block
                 }
 
-                char* newBlockAddr = reinterpret_cast<char*>(current) + sizeof(Header) + requestedSize;
+                char* newBlockAddr = reinterpret_cast<char*>(current) + HEADER_SIZE + requestedSize;
                 Header* newHeader = reinterpret_cast<Header*>(newBlockAddr);
-                newHeader->size = current->size - (sizeof(Header) + requestedSize); // or leftover - sizeof(Header)
+                newHeader->size = current->size - (HEADER_SIZE + requestedSize); // or leftover - sizeof(Header)
                 newHeader->free = true;
                 newHeader->next = current->next;
+                newHeader->prev = current;
                 
                 current->free = false;
                 current->size = requestedSize;
-                current->next = newHeader;
 
+                if (current->next != nullptr)
+                {
+                    current->next->prev = newHeader;
+                }
+
+                current->next = newHeader;
             }
 
-            // Walk the list; whenever two ADJACENT blocks are both free, merge them.
+            // Check next and prev blocks: if they are free, merge with them.
             // Prevents external fragmentation to some extent
-            void coalesce()
+            void coalesce(Header* current)
             {
-                Header* current = head;
-
-                while (current != nullptr && current->next != nullptr)
+                // Merge with the next block
+                if (current->next != nullptr && current->next->free)
                 {
-                    if (current->free && current->next->free)
+                    Header* nextBlock = current->next;
+                    current->size = nextBlock->size + HEADER_SIZE + current->size;
+                    current->free = true;
+
+                    current->next = nextBlock->next;
+
+                    if (current->next != nullptr)
                     {
-                        current->size = current->size + current->next->size + sizeof(Header);
-                        current->next = current->next->next;
-                        // don't advance - keep checking in case there's a THIRD
-                        // free block after this merged one
+                        current->next->prev = current;
                     }
-                    else
+
+                }
+
+                // Merge with the prev block
+                if (current->prev != nullptr && current->prev->free)
+                {
+                    Header* prevBlock = current->prev;
+                    prevBlock->size = prevBlock->size + HEADER_SIZE + current->size;
+                    prevBlock->free = true;
+
+                    prevBlock->next = current->next;
+
+                    if (prevBlock->next != nullptr)
                     {
-                        current = current->next;
+                        prevBlock->next->prev = prevBlock;
                     }
                 }
             }
-
 };
 
 int main()
