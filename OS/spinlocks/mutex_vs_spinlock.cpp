@@ -3,10 +3,7 @@
 #include <mutex>
 #include <atomic>
 #include <benchmark/benchmark.h>
-
-// Shared counter
-int counter {0};
-std::mutex mtx;
+#include <immintrin.h>
 
 class Spinlock
 {
@@ -18,12 +15,16 @@ class Spinlock
         {
             while (1)
             {
-                if (!flag.exchange(true, std::memory_order_acq_rel)) // test-and-set
+                if (!flag.exchange(true, std::memory_order_acquire)) // test-and-set
                 {
                     return;
                 }
 
-                while (flag.load(std::memory_order_relaxed)); // test
+                while (flag.load(std::memory_order_relaxed)) // test
+		{
+		    // read-only spinning
+		    _mm_pause(); // x86 PAUSE instruction: rep nop
+		}
                 
             }
         }
@@ -34,13 +35,20 @@ class Spinlock
         }
 };
 
+int counter {0};
+std::mutex mtx; // global shared mutex
+Spinlock sl; // global shared spinlock
+
 static void BM_mutex(benchmark::State& s)
 {
     for(auto _ : s)
     {
         mtx.lock();
+
         counter++;
-        mtx.unlock();
+        for (volatile int i = 0; i < 100; i++){}
+        
+	mtx.unlock();
     }
 
     benchmark::DoNotOptimize(counter); // avoid dead-code elimination of counter
@@ -48,21 +56,32 @@ static void BM_mutex(benchmark::State& s)
 
 static void BM_spinlock(benchmark::State& s)
 {
-    Spinlock sl;
-
     for(auto _ : s)
     {
         sl.lock();
-        counter++;
-        sl.unlock();
+        
+	counter++;
+	for (volatile int i = 0; i < 100; i++){}
+        
+	sl.unlock();
     }
 
     benchmark::DoNotOptimize(counter); // avoid dead-code elimination of counter
 }
 
 
-BENCHMARK(BM_mutex);
-BENCHMARK(BM_spinlock);
+BENCHMARK(BM_mutex)
+	->Threads(1)
+	->Threads(2)
+	->Threads(4)
+	->Threads(8);
+
+BENCHMARK(BM_spinlock)
+	->Threads(1)
+	->Threads(2)
+	->Threads(4)
+	->Threads(8);
+
 BENCHMARK_MAIN();
 
 
